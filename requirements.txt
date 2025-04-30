@@ -1,0 +1,11 @@
+fastapi
+numpy
+matplotlib
+pandas
+requests
+boto3
+uvicorn
+pydantic
+python-multipart
+python-dotenv
+streamlit
