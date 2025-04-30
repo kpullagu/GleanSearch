@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Stack to deploy EC2 instance with Python, Streamlit, and custom application using Secrets Manager'
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+
+  SecretName:
+    Description: Name of the secret in AWS Secrets Manager
+    Type: String
+    Default: 'glean-api-secret'
+
+Resources:
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH and Streamlit access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8501
+          ToPort: 8501
+          CidrIp: 0.0.0.0/0
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretName}*'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref EC2InstanceRole
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+        - !Ref EC2SecurityGroup
+      KeyName: !Ref KeyName
+      ImageId: ami-0c7217cdde317cfec  # Amazon Linux 2023 AMI (us-east-1)
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install -y python3 python3-pip git
+          pip3 install streamlit boto3
+          mkdir /app
+          cd /app
+          # Clone your repository or copy your files here
+          # git clone <your-repo-url>
+          # Copy your requirements.txt and glean_search_app.py
+          if [ -f "requirements.txt" ]; then
+            pip3 install -r requirements.txt
+          fi
+          # Fetch secret and update glean_search_app.py
+          SECRET=$(aws secretsmanager get-secret-value --secret-id ${SecretName} --region ${AWS::Region} --query SecretString --output text)
+          API_TOKEN=$(echo $SECRET | jq -r .API_TOKEN)
+          sed -i "s/API_TOKEN = \".*\"/API_TOKEN = \"$API_TOKEN\"/" glean_search_app.py
+          # Run Streamlit (in screen session to keep it running)
+          yum install -y screen
+          screen -dmS streamlit bash -c "streamlit run glean_search_app.py --server.address 0.0.0.0"
+
+Outputs:
+  PublicDNS:
+    Description: Public DNSName of the EC2 instance
+    Value: !GetAtt EC2Instance.PublicDnsName
+  PublicIP:
+    Description: Public IP address of the EC2 instance
+    Value: !GetAtt EC2Instance.PublicIp
+  StreamlitURL:
+    Description: URL to access Streamlit application
+    Value: !Sub http://${EC2Instance.PublicDnsName}:8501
