@@ -53,9 +53,9 @@ def search_glean_api(query):
 
 # --- Streamlit UI ---
 st.set_page_config(layout="wide")
-st.title("Glean Document Search (Datasource: interviewds)")
+st.title("Glean Search powered by Streamlit on Amazon Ec2")
 # Add a custom image to the header
-st.image("header_image-1.jpg", caption="Glean Document Search", use_container_width=True)
+st.image("header_image-1.jpg", caption="", use_container_width=True)
 
 st.markdown("""
 ### 📚 Welcome to the Document Search Platform!
@@ -142,7 +142,6 @@ with st.sidebar:
     📚 **Bulk Processing**
     - Efficient document indexing
     - Automatic metadata extraction
-    - Seamless integration
     </div>
     """, unsafe_allow_html=True)
 
@@ -167,22 +166,24 @@ with st.sidebar:
     # Interactive sample queries
     st.markdown("### 🌟 Try These Magic Queries")
     
-    # Create clickable sample queries
-    sample_queries = [
-        ("🤖 AI & Machine Learning", "artificial intelligence"),
-        ("📊 Data Science Explorer", "data science techniques"),
-        ("🐍 Python Mastery", "python programming best practices"),
-        ("📁 Document Deep Dive", "Sample Document 20"),
-        ("🎯 Topic Navigator", "Topic 5 analysis")
-    ]
-
-    # Make queries interactive
-    for label, query in sample_queries:
-        if st.button(label, key=f"query_{query}"):
-            # You can add functionality to automatically fill the search box
-            st.session_state.search_query = query
-            st.success(f"Query '{query}' selected!")
-
+    st.markdown("""
+    Try these example searches:
+    
+    **Document Queries:**
+    ```
+    • Sample Document 20
+    • Topic 5
+    ```
+    
+    **Topic Searches:**
+    ```
+    • artificial intelligence
+    • data science
+    • python programming
+    ```
+    
+    **Tips:** Copy any query and paste in the search box above.
+    """)
     # Add a fun fact section
     st.markdown("""
     ---
@@ -193,39 +194,17 @@ with st.sidebar:
     import random
     facts = [
         "Glean's API can process thousands of documents per minute!",
-        "Our search algorithm understands natural language queries.",
-        "You can index documents in multiple languages.",
+        "Gleans search algorithm understands natural language queries.",
         "Search results are ranked by relevance automatically.",
         "The API supports real-time indexing updates."
     ]
     st.info(random.choice(facts))
 
-    # Add usage statistics (you can make these dynamic)
-    st.markdown("""
-    ---
-    ### 📈 Live Stats
-    """)
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Indexed Docs", "1.2K", "+123 today")
-    with col2:
-        st.metric("Search Speed", "0.2s", "-0.1s")
-
-    # Add a feedback section
-    st.markdown("---")
-    st.markdown("### 🎯 Rate Your Experience")
-    rating = st.slider("How helpful was this search?", 1, 5, 5)
-    if rating > 3:
-        st.success("Thanks for the positive feedback! 🌟")
-    elif rating > 0:
-        st.info("Thanks! We're working to improve! 💪")
-
     # Footer
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666;'>
-    Powered by Glean API<br>
-    v2.0.0
+    Powered by Glean API
     </div>
     """, unsafe_allow_html=True)
 
