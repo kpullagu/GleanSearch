@@ -83,7 +83,7 @@ Resources:
           mkdir /app
           cd /app
           # Clone your repository or copy your files here
-          # git clone <your-repo-url>
+          git clone https://github.com/kpullagu/GleanSearch .
           # Copy your requirements.txt and glean_search_app.py
           if [ -f "requirements.txt" ]; then
             pip3 install -r requirements.txt
