@@ -171,15 +171,15 @@ with st.sidebar:
     
     **Document Queries:**
     ```
-    • Sample Document 20
-    • Topic 5
+    Sample Document 20
+    Topic 5
     ```
     
     **Topic Searches:**
     ```
-    • artificial intelligence
-    • data science
-    • python programming
+    artificial intelligence
+    data science
+    python programming
     ```
     
     **Tips:** Copy any query and paste in the search box above.
