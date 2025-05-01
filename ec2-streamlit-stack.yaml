@@ -72,7 +72,7 @@ Resources:
       SecurityGroups:
         - !Ref EC2SecurityGroup
       KeyName: !Ref KeyName
-      ImageId: ami-0c7217cdde317cfec  # Amazon Linux 2023 AMI (us-east-1)
+      ImageId: ami-0e449927258d45bc4  # Amazon Linux 2023 AMI (us-east-1)
       IamInstanceProfile: !Ref EC2InstanceProfile
       UserData:
         Fn::Base64: !Sub |
