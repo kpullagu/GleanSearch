@@ -79,15 +79,12 @@ Resources:
           #!/bin/bash -xe
           yum update -y
           yum install -y python3 python3-pip git
-          pip3 install streamlit boto3
           mkdir /app
           cd /app
           # Clone your repository or copy your files here
           git clone https://github.com/kpullagu/GleanSearch .
           # Copy your requirements.txt and glean_search_app.py
-          if [ -f "requirements.txt" ]; then
-            pip3 install -r requirements.txt
-          fi
+          pip3 install -r requirements.txt
           # Fetch secret and update glean_search_app.py
           SECRET=$(aws secretsmanager get-secret-value --secret-id ${SecretName} --region ${AWS::Region} --query SecretString --output text)
           API_TOKEN=$(echo $SECRET | jq -r .API_TOKEN)
