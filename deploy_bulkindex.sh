@@ -9,8 +9,8 @@ REGION="us-east-1"  # Change this to your AWS region
 
 # Glean Configuration
 LAMBDA_FUNCTION_NAME="s3-sqs-glean-indexer "  # Your existing Lambda function name
-GLEAN_API_TOKEN="y1ica8IKPeiKjQBPtu99uVyKpl820DE3B9vw7yq1FIM="
-GLEAN_DATASOURCE="interviewds"
+GLEAN_API_TOKEN="glean_token"
+GLEAN_DATASOURCE="gleandatasource"
 GLEAN_API_ENDPOINT="https://glean-be.glean.com/api/index/v1/bulkindexdocuments"
 
 # -----------------------------
