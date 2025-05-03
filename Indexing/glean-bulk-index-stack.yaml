@@ -1,0 +1,284 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Glean Bulk Indexer
+
+Parameters:
+  LambdaFunctionName:
+    Type: String
+    Description: Name of the existing Lambda function
+  GleanApiToken:
+    Type: String
+    Description: Glean API Token
+    NoEcho: true
+  GleanDatasource:
+    Type: String
+    Description: Glean Datasource Name
+  GleanApiEndpoint:
+    Type: String
+    Description: Glean API Endpoint
+    Default: https://glean-be.glean.com/api/index/v1/bulkindexdocuments
+  ObjectType:
+    Type: String
+    Description: Type of the object being processed
+  ViewUrlBase:
+    Type: String
+    Description: Base URL for viewing objects
+
+Resources:
+  ProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-processing-queue
+      VisibilityTimeout: 900
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-dlq
+
+  ExistingLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  SQSPermissionsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub ${AWS::StackName}-sqs-permissions
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+            Resource: !GetAtt ProcessingQueue.Arn
+      Roles:
+        - !Ref ExistingLambdaRole
+
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-upload
+
+  QueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ProcessingQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt ProcessingQueue.Arn
+            Condition:
+              ArnLike:
+                aws:SourceArn: !GetAtt UploadBucket.Arn
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  S3AccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub ${AWS::StackName}-s3-access
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - !GetAtt UploadBucket.Arn
+              - !Sub ${UploadBucket.Arn}/*
+      Roles:
+        - !Ref ExistingLambdaRole
+
+  # Lambda function to update existing Lambda configuration
+  LambdaConfigurationUpdater:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaConfigurationUpdaterRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      lambda_client = boto3.client('lambda')
+                      lambda_client.update_function_configuration(
+                          FunctionName=event['ResourceProperties']['FunctionName'],
+                          Environment={
+                              'Variables': {
+                                  'GLEAN_API_TOKEN': event['ResourceProperties']['GleanApiToken'],
+                                  'GLEAN_DATASOURCE': event['ResourceProperties']['GleanDatasource'],
+                                  'GLEAN_API_ENDPOINT': event['ResourceProperties']['GleanApiEndpoint'],
+                                  'BUCKET_NAME': event['ResourceProperties']['BucketName']
+                              }
+                          }
+                      )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Runtime: python3.9
+      Timeout: 300
+
+  LambdaConfigurationUpdaterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: UpdateLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:UpdateFunctionConfiguration
+                Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunctionName}
+
+  UpdateLambdaConfig:
+    Type: Custom::LambdaConfiguration
+    DependsOn:
+      - SQSPermissionsPolicy
+      - S3AccessPolicy
+    Properties:
+      ServiceToken: !GetAtt LambdaConfigurationUpdater.Arn
+      FunctionName: !Ref LambdaFunctionName
+      GleanApiToken: !Ref GleanApiToken
+      GleanDatasource: !Ref GleanDatasource
+      GleanApiEndpoint: !Ref GleanApiEndpoint
+      BucketName: !Ref UploadBucket
+
+  S3NotificationConfiguration:
+    Type: Custom::S3NotificationConfiguration
+    DependsOn: QueuePolicy
+    Properties:
+      ServiceToken: !GetAtt NotificationConfigurationFunction.Arn
+      BucketName: !Ref UploadBucket
+      QueueArn: !GetAtt ProcessingQueue.Arn
+
+  NotificationConfigurationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt NotificationConfigurationRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      s3 = boto3.client('s3')
+                      bucket = event['ResourceProperties']['BucketName']
+                      queue_arn = event['ResourceProperties']['QueueArn']
+                      
+                      config = {
+                          'QueueConfigurations': [
+                              {
+                                  'Id': 'ProcessingQueueNotification',
+                                  'QueueArn': queue_arn,
+                                  'Events': ['s3:ObjectCreated:*'],
+                                  'Filter': {
+                                      'Key': {
+                                          'FilterRules': [
+                                              {
+                                                  'Name': 'prefix',
+                                                  'Value': 'new/'
+                                              }
+                                          ]
+                                      }
+                                  }
+                              }
+                          ]
+                      }
+                      
+                      s3.put_bucket_notification_configuration(
+                          Bucket=bucket,
+                          NotificationConfiguration=config
+                      )
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Runtime: python3.9
+      Timeout: 300
+
+  NotificationConfigurationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3NotificationAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutBucketNotification
+                Resource: !GetAtt UploadBucket.Arn
+
+  LambdaEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    DependsOn: UpdateLambdaConfig
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      EventSourceArn: !GetAtt ProcessingQueue.Arn
+      FunctionName: !Ref LambdaFunctionName
+      MaximumBatchingWindowInSeconds: 300
+
+Outputs:
+  UploadBucketName:
+    Description: Name of the S3 bucket for file uploads
+    Value: !Ref UploadBucket
+  NewFolderPath:
+    Description: Path for uploading new files
+    Value: !Sub s3://${UploadBucket}/new/
+  ProcessingQueueURL:
+    Description: URL of the SQS processing queue
+    Value: !Ref ProcessingQueue
+  DeadLetterQueueURL:
+    Description: URL of the Dead Letter Queue
+    Value: !Ref DeadLetterQueue
