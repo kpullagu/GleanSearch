@@ -6,9 +6,9 @@ import os
 import re
 
 # Configuration
-GLEAN_SEARCH_API_ENDPOINT = "https://support-lab-be.glean.com/rest/api/v1/search"  # Updated search endpoint
+GLEAN_SEARCH_API_ENDPOINT = "https://glean-be.glean.com/rest/api/v1/search"  # Updated search endpoint
 API_TOKEN = "dummy_placeholder_value"
-DATASOURCE_NAME = "interviewds"
+DATASOURCE_NAME = "gleandatasource"
 VIEW_URL_BASE = "https://ncbi.nlm.nih.gov/pubmed/"  # Base URL used during indexing
 
 headers = {

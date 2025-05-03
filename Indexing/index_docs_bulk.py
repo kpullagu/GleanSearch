@@ -6,7 +6,7 @@ import re
 import uuid
 
 # Configuration
-GLEAN_API_ENDPOINT = "https://support-lab-be.glean.com/api/index/v1/indexdocuments" # Bulk endpoint
+GLEAN_API_ENDPOINT = "https://glean-be.glean.com/api/index/v1/indexdocuments" # Bulk endpoint
 API_TOKEN = "my_index_token" # Glean Token
 DATASOURCE_NAME = "MY_DATA_SOURCE_NAME" # Datasource name
 SAMPLE_DOCS_DIR = "sample_docs" # Local directory containing sample documents
