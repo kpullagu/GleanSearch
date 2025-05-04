@@ -4,6 +4,8 @@ import os
 import json
 import re
 import uuid
+import random
+import time
 
 # Configuration
 GLEAN_API_ENDPOINT = "https://glean-be.glean.com/api/index/v1/indexdocuments" # Bulk endpoint
@@ -12,7 +14,6 @@ DATASOURCE_NAME = "MY_DATA_SOURCE_NAME" # Datasource name
 SAMPLE_DOCS_DIR = "sample_docs" # Local directory containing sample documents
 # Define a base URL that matches the expected pattern
 VIEW_URL_BASE = "https://ncbi.nlm.nih.gov/pubmed/" # Base URL for viewURL
-
 
 headers = {
     "Authorization": f"Bearer {API_TOKEN}",

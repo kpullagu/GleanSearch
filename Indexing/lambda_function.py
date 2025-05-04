@@ -22,7 +22,7 @@ s3_client = boto3.client('s3')
 # Initialize the counter with a random number between 1 and 10,000
 counter = random.randint(1, 10000)
 
-def create_document(doc_id, title, content, filename):
+def create_document(doc_id, title, content, filename, metadata):
     """Create document payload for Glean API"""
     global counter  # Use the global counter variable
     view_url = f"{VIEW_URL_BASE}{counter}"  # Generate the view URL using the counter
@@ -33,18 +33,16 @@ def create_document(doc_id, title, content, filename):
     return {
         "id": doc_id,
         "datasource": GLEAN_DATASOURCE,
-        "objectType": OBJECT_TYPE,
+        "objectType": metadata.get("objectType", OBJECT_TYPE),
         "title": title,
         "viewURL": view_url,
         "permissions": {
             "allowAllDatasourceUsersAccess": True
         },
         "customProperties": [
-            {
-                "name": "Org",
-                "value": "Infrastructure"
-            }
+            {"name": key, "value": value} for key, value in metadata.get("customProperties", {}).items()
         ],
+        "tags": metadata.get("tags", ["default-tag"]),
         "body": {
             "mimeType": mime_type,
             "textContent": content
@@ -106,7 +104,10 @@ def lambda_handler(event, context):
                 title = os.path.splitext(filename)[0]
                 doc_id = f"{UPLOAD_ID_PREFIX}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{title}"
                 
-                doc = create_document(doc_id, title, content, filename)
+                # Parse metadata from the file content
+                metadata = parse_metadata(content)
+                
+                doc = create_document(doc_id, title, content, filename, metadata)
                 documents.append(doc)
                 files_to_move.append({'bucket': bucket, 'old_key': key, 'title': title})
                 print(f"Successfully processed file: {key}")
@@ -130,6 +131,32 @@ def get_file_content(bucket, key):
     """Get file content from S3"""
     response = s3_client.get_object(Bucket=bucket, Key=key)
     return response['Body'].read().decode('utf-8')
+
+def parse_metadata(content):
+    """Parse metadata from the file content"""
+    metadata = {}
+    metadata['title'] = extract_field(content, "Title")
+    metadata['objectType'] = extract_field(content, "ObjectType")
+    metadata['tags'] = extract_field(content, "Tags", is_list=True)
+    custom_props = extract_field(content, "CustomProperties", is_json=True)
+    metadata['customProperties'] = custom_props if custom_props else {}
+    return metadata
+
+def extract_field(content, field_name, is_list=False, is_json=False):
+    """Extract a specific field from the content"""
+    import re
+    match = re.search(rf"{field_name}: (.*)", content)
+    if match:
+        value = match.group(1).strip()
+        if is_list:
+            return value.split(", ")
+        if is_json:
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return {}
+        return value
+    return [] if is_list else {} if is_json else None
 
 def move_processed_files(files):
     """Move processed files to 'processed' folder"""
