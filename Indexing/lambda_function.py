@@ -12,8 +12,8 @@ from datetime import datetime
 GLEAN_API_TOKEN = os.environ.get("GLEAN_API_TOKEN", "gleantoken")
 GLEAN_DATASOURCE = os.environ.get("GLEAN_DATASOURCE", "gleandatasource")
 GLEAN_API_ENDPOINT = os.environ.get("GLEAN_API_ENDPOINT", "https://glean-be.glean.com/api/index/v1/bulkindexdocuments")
-VIEW_URL_BASE = os.environ.get("VIEW_URL_BASE", "https://ncbi.nlm.nih.gov/pubmed/")
-OBJECT_TYPE = os.environ.get("OBJECT_TYPE", "sampleTextDoc")
+VIEW_URL_BASE = os.environ.get("VIEW_URL_BASE", "https://en.wikipedia.org/wiki/")
+
 BUCKET_NAME = os.environ.get("BUCKET_NAME")
 UPLOAD_ID_PREFIX = "PK"
 
@@ -31,22 +31,36 @@ def create_document(doc_id, title, content, filename, metadata):
     mime_type = "text/plain"  # Hardcoded since we only deal with plain text files
     
     return {
-        "id": doc_id,
-        "datasource": GLEAN_DATASOURCE,
-        "objectType": metadata.get("objectType", OBJECT_TYPE),
-        "title": title,
-        "viewURL": view_url,
-        "permissions": {
-            "allowAllDatasourceUsersAccess": True
-        },
-        "customProperties": [
-            {"name": key, "value": value} for key, value in metadata.get("customProperties", {}).items()
-        ],
-        "tags": metadata.get("tags", ["default-tag"]),
-        "body": {
-            "mimeType": mime_type,
-            "textContent": content
-        }
+            "title": metadata['title'],
+            "datasource": GLEAN_DATASOURCE,
+            "objectType": metadata['objectType'],
+            "body": {
+                "mimeType": "text/plain",
+                "textContent": metadata['body']
+                },
+                "summary": {
+                    "mimeType": "text/plain",
+                    "textContent": metadata['summary']
+                },               
+                "viewURL": view_url,
+                "permissions": {
+                    "allowAnonymousAccess": True
+                },
+                "author": {
+                    "email": "alex@glean-sandbox.com",
+                    "name": "KPull"
+                },
+                "updatedBy": {
+                    "email": "alex@glean-sandbox.com",
+                    "name": "KPull"
+                },
+                "owner": {
+                    "email": "alex@glean-sandbox.com",
+                    "name": "KP"
+                },
+                "status": "active",                                                                               
+                "tags": metadata['tags'],
+                "customProperties": metadata['customProperties']
     }
 
 def call_glean_bulk_api(documents):
@@ -65,7 +79,8 @@ def call_glean_bulk_api(documents):
         "Authorization": f"Bearer {GLEAN_API_TOKEN}",
         "Content-Type": "application/json"
     }
-
+    #print(json.dumps(payload, indent=4))  # Pretty-print the payload for debugging
+    print(f"Payload being sent:\n{json.dumps(payload, indent=4)}")
     print(f"Uploading batch with uploadId: {upload_id}")
     try:
         response = requests.post(GLEAN_API_ENDPOINT, headers=headers, json=payload)
@@ -101,12 +116,10 @@ def lambda_handler(event, context):
             try:
                 content = get_file_content(bucket, key)
                 filename = os.path.basename(key)
-                title = os.path.splitext(filename)[0]
-                doc_id = f"{UPLOAD_ID_PREFIX}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{title}"
-                
                 # Parse metadata from the file content
-                metadata = parse_metadata(content)
-                
+                metadata = parse_metadata(content)                
+                title= metadata['title']
+                doc_id = f"{UPLOAD_ID_PREFIX}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{title}"
                 doc = create_document(doc_id, title, content, filename, metadata)
                 documents.append(doc)
                 files_to_move.append({'bucket': bucket, 'old_key': key, 'title': title})
@@ -138,14 +151,25 @@ def parse_metadata(content):
     metadata['title'] = extract_field(content, "Title")
     metadata['objectType'] = extract_field(content, "ObjectType")
     metadata['tags'] = extract_field(content, "Tags", is_list=True)
+    metadata['body'] = extract_field(content, "Body", is_multiline=True)  # Extract full body
+    metadata['summary'] = extract_field(content, "Executive Summary", is_multiline=False)  # Extract single-line summary
+    
+    # Extract CustomProperties as JSON
     custom_props = extract_field(content, "CustomProperties", is_json=True)
-    metadata['customProperties'] = custom_props if custom_props else {}
+    if custom_props:
+        metadata['customProperties'] = [
+            {"name": key, "value": value} for key, value in custom_props.items()
+        ]
+    else:
+        metadata['customProperties'] = [{"name": "author", "value": "KPull"}]  # Default value if not found
+    
     return metadata
 
-def extract_field(content, field_name, is_list=False, is_json=False):
-    """Extract a specific field from the content"""
+def extract_field(content, field_name, is_list=False, is_json=False, is_multiline=False):
+    """Extract a specific field from the content."""
     import re
-    match = re.search(rf"{field_name}: (.*)", content)
+    # Use re.DOTALL if is_multiline is True to match across multiple lines
+    match = re.search(rf"{field_name}:(.*)", content, re.DOTALL if is_multiline else 0)
     if match:
         value = match.group(1).strip()
         if is_list:
@@ -156,15 +180,16 @@ def extract_field(content, field_name, is_list=False, is_json=False):
             except json.JSONDecodeError:
                 return {}
         return value
-    return [] if is_list else {} if is_json else None
+    return [] if is_list else {} if is_json else ""
 
 def move_processed_files(files):
     """Move processed files to 'processed' folder"""
     for file in files:
         try:
             timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-            new_key = f"processed/{timestamp}_{file['title']}.txt"
-            
+            # Extract the filename without extension from the old_key
+            filename_without_extension = os.path.splitext(os.path.basename(file['old_key']))[0]
+            new_key = f"processed/{timestamp}_{filename_without_extension}.txt"            
             s3_client.copy_object(
                 Bucket=file['bucket'],
                 CopySource={'Bucket': file['bucket'], 'Key': file['old_key']},
@@ -178,5 +203,7 @@ def move_processed_files(files):
             
             print(f"Moved file from {file['old_key']} to {new_key}")
             
+        except Exception as e:
+            print(f"Error moving file {file['old_key']}: {str(e)}")
         except Exception as e:
             print(f"Error moving file {file['old_key']}: {str(e)}")
