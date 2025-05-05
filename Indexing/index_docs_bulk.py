@@ -13,7 +13,7 @@ API_TOKEN = "my_index_token" # Glean Token
 DATASOURCE_NAME = "MY_DATA_SOURCE_NAME" # Datasource name
 SAMPLE_DOCS_DIR = "sample_docs" # Local directory containing sample documents
 # Define a base URL that matches the expected pattern
-VIEW_URL_BASE = "https://ncbi.nlm.nih.gov/pubmed/" # Base URL for viewURL
+VIEW_URL_BASE = "https://en.wikipedia.org/wiki/" # Base URL for viewURL
 
 headers = {
     "Authorization": f"Bearer {API_TOKEN}",
@@ -32,6 +32,7 @@ def parse_document(file_path):
     metadata['tags'] = re.search(r"Tags: (.*)", content)
     custom_props_match = re.search(r"CustomProperties: ({.*})", content, re.DOTALL)
     body_match = re.search(r"Body:\n(.*)", content, re.DOTALL)
+    summary_match = re.search(r"Executive Summary:\n(.*)", content, re.DOTALL)
     
     # Extract values or set defaults
     metadata['title'] = metadata['title'].group(1) if metadata['title'] else "Untitled"
@@ -47,13 +48,18 @@ def parse_document(file_path):
     else:
         metadata['customProperties'] = [{"name": "author", "value": "KPull"}]
     
+    # Extract the body content
     body = body_match.group(1).strip() if body_match else ""
+    
+    # Extract the Executive Summary until the first newline
+    summary = ""
+    if summary_match:
+        summary = summary_match.group(1).split('\n')[0].strip()
     
     if not metadata['objectType']:
         raise ValueError(f"Missing 'ObjectType' in document: {file_path}")
     
-    return metadata, body
-
+    return metadata, body, summary
 
 def prepare_documents_payload():
     """Prepares the list of document objects for the bulk API payload."""
@@ -64,7 +70,7 @@ def prepare_documents_payload():
     for filename in sorted(os.listdir(SAMPLE_DOCS_DIR)):
         if filename.endswith(".txt"):
             file_path = os.path.join(SAMPLE_DOCS_DIR, filename)
-            metadata, body = parse_document(file_path)
+            metadata, body, summary = parse_document(file_path)
             
             document_object = {
                 "id": os.path.splitext(filename)[0],
@@ -75,10 +81,27 @@ def prepare_documents_payload():
                     "mimeType": "text/plain",
                     "textContent": body
                 },
+                "summary": {
+                    "mimeType": "text/plain",
+                    "textContent": summary
+                },               
                 "viewURL": f"{VIEW_URL_BASE}{increment_number}",
                 "permissions": {
                     "allowAnonymousAccess": True
                 },
+                "author": {
+                    "email": "alex@glean-sandbox.com",
+                    "name": "KPull"
+                },
+                "updatedBy": {
+                    "email": "alex@glean-sandbox.com",
+                    "name": "KPull"
+                },
+                "owner": {
+                    "email": "alex@glean-sandbox.com",
+                    "name": "KP"
+                },
+                "status": "active",                                                                               
                 "tags": metadata['tags'],
                 "customProperties": metadata['customProperties']
             }
@@ -107,8 +130,8 @@ def index_documents_bulk(documents_list):
     }
     
     print(f"Sending bulk indexing request (Upload ID: {upload_id}) with {len(documents_list)} documents...")
-    print(json.dumps(payload, indent=4))  # Pretty-print the payload for debugging
-    print(f"Payload being sent:\n{json.dumps(payload, indent=4)}")
+    #print(json.dumps(payload, indent=4))  # Pretty-print the payload for debugging
+    #print(f"Payload being sent:\n{json.dumps(payload, indent=4)}")
     
     try:
         response = requests.post(GLEAN_API_ENDPOINT, headers=headers, json=payload)
@@ -142,4 +165,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
