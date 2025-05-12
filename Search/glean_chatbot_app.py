@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import streamlit as st
 import streamlit.components.v1 as components  # Change this line
 import requests
@@ -224,7 +223,7 @@ def sidebar_content():
         <div style='background-color: #ffffff; padding: 15px; border-radius: 10px;'>
         <h4>This chatbot interface uses:</h4>
 
-        • Glean Search API for intelligent document search<br>
+        • Glean Search API for intelligent search across CRM<br>
         • Streamlit for the interactive UI<br>
         • AWS EC2 for robust cloud hosting
         </div>
@@ -255,7 +254,7 @@ def main():
     st.markdown("""
     This intelligent chatbot harnesses the power of **Glean's advanced search technology** to help you:
 
-    * 🎯 Find information across your documents with precision
+    * 🎯 Find information across your CRM with precision
     * 🚀 Access indexed content instantly
     * 💫 Experience conversational search results
     """)
@@ -265,7 +264,7 @@ def main():
 
     with col1:
         # Chat input
-        user_input = st.text_input("Ask me anything:", placeholder="e.g., What's our leave policy? What were the Q1 marketing results?")
+        user_input = st.text_input("Ask me anything:", placeholder="e.g., Give me opportunities with stage decisionmakerboughtin, What's our leave policy? What were the Q1 marketing results?")
 
         if st.button("Send", key="send_button"):
                if user_input:
