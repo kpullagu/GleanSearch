@@ -1,4 +1,4 @@
-Structure
+**Structure**
 ├── Indexing/hubspot_deals.py                # Fetches and processes deal data from HubSpot
 │   └── **Purpose:** Connects to the HubSpot API, retrieves deal data, transforms it into JSON format, and saves it for further processing.
 │
@@ -22,13 +22,9 @@ Structure
 │
 ├── Search/stop_streamlit.sh               # Stops the Streamlit chatbot application
 │   └── **Purpose:** Terminates the Streamlit process running on the EC2 instance to free up resources or prepare for updates.
-==
 
-Indexing - This folder contains code to Index documents into Glean Custom Data Source.
-===
 
-Search - This folder contains code to search Glean Index
-===
+**Indexing**- This folder contains code to Index documents into Glean Custom Data Source.
 
 1. hubspot_deals.py
 Purpose:
@@ -87,15 +83,16 @@ The script sets up the required environment variables.
 Deploys the CloudFormation stack using the AWS CLI.
 Outputs the status of the deployment and any relevant resource details.
 
-Overall Workflow:
+**Overall Workflow:**
 Data Fetching: Use hubspot_deals.py to fetch and save deal data from the HubSpot API.
 File Upload: Upload the deal object files to the deals/ folder in the S3 bucket.
 File Processing: The lambda_function_hubspotdeals.py processes the uploaded files, prepares them for indexing, and sends them to the Glean API.
 Infrastructure Deployment: Use glean-bulk-index-stack.yaml and deploy_bulkindex.sh to set up and manage the required AWS infrastructure.
 This setup ensures a seamless pipeline for fetching, processing, and indexing deal data into Glean.
-===============
 
-Search App:
+
+
+**Search** - This folder contains code to search Glean Index
 
 1. glean_chatbot_app.py
 Purpose:
@@ -154,11 +151,11 @@ The script connects to the EC2 instance via SSH.
 Identifies the Streamlit process and terminates it.
 Confirms that the application has been stopped.
 
-Overall Workflow:
+**Overall Workflow:**
 Infrastructure Deployment: Use ec2-streamlit-stack.yaml to provision the EC2 instance and related resources.
 Application Deployment: Use deploy_search.sh to set up and launch the Streamlit-based chatbot application.
 Search Interaction: Users interact with the chatbot via the Streamlit interface to perform searches and view results.
 Application Management: Use stop_streamlit.sh to stop the application when needed.
 This setup provides a scalable and user-friendly solution for searching and interacting with indexed documents in Glean.
-====
+
 
