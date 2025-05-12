@@ -1,6 +1,6 @@
 **Structure**
-├── Indexing/hubspot_deals.py                # Fetches and processes deal data from HubSpot\n
-│   └── **Purpose:** Connects to the HubSpot API, retrieves deal data, transforms it into JSON format, and saves it for further processing.\n
+├── Indexing/hubspot_deals.py                # Fetches and processes deal data from HubSpot
+│   └── **Purpose:** Connects to the HubSpot API, retrieves deal data, transforms it into JSON format, and saves it for further processing.
 │
 ├── Indexing/lambda_function_hubspotdeals.py              # Processes deal files from S3 and indexes them in Glean
 │   └── **Purpose:** Listens for S3 events, parses deal object files, creates document payloads, sends them to the Glean API, and moves processed files to a `processed/` folder.
